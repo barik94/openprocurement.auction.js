@@ -20,6 +20,7 @@ angular.module('auction').controller('AuctionController',[
 
     $rootScope.lang = 'uk';
     $rootScope.normilized = false;
+    $rootScope.overloadPrice = false;
     $rootScope.format_date = AuctionUtils.format_date;
     $rootScope.bidder_id = null;
     $rootScope.bid = null;
@@ -491,7 +492,6 @@ angular.module('auction').controller('AuctionController',[
               });
               $rootScope.form.bid = "";
               $rootScope.form.full_price = '';
-              $rootScope.form.bid_temp = '';
 
             } else {
               $log.info({
@@ -792,24 +792,46 @@ angular.module('auction').controller('AuctionController',[
         backdrop: true
       });
     };
+
     /* 2-WAY INPUT */
     $rootScope.calculate_bid_temp = function() {
-      $rootScope.form.bid_temp = Number(math.fraction(($rootScope.form.bid * 100).toFixed(), 100));
-      $rootScope.form.full_price = $rootScope.form.bid_temp / $rootScope.bidder_coeficient;
-      $log.debug("Set bid_temp:", $rootScope.form);
+      var new_full_price;
+      if(angular.isDefined($rootScope.form.bid)){
+        var form_bid = Number(math.fraction(($rootScope.form.bid * 100).toFixed(), 100));
+        new_full_price = form_bid / $rootScope.bidder_coeficient;
+      }
+      $rootScope.form.full_price = new_full_price;
+
+      var lastBid = $rootScope.get_last_bid();
+      if (lastBid !== undefined || lastBid != null) {
+        if (Number($rootScope.form.bid) > lastBid.amount * 10){
+          $rootScope.overloadPrice = true;
+          return;
+        }
+        $rootScope.overloadPrice = false;
+      }
+
+
     };
+
     $rootScope.calculate_full_price_temp = function() {
-      $rootScope.form.bid = (math.fix((math.fraction($rootScope.form.full_price) * $rootScope.bidder_coeficient) * 100)) / 100;
-      $rootScope.form.full_price_temp = $rootScope.form.bid / $rootScope.bidder_coeficient;
+      var new_form_bid;
+      if(angular.isDefined($rootScope.form.full_price)){
+        new_form_bid = (math.fix((math.fraction($rootScope.form.full_price) * $rootScope.bidder_coeficient) * 100)) / 100;
+      }
+      $rootScope.form.bid = new_form_bid;
     };
-    $rootScope.set_bid_from_temp = function() {
-      $rootScope.form.bid = $rootScope.form.bid_temp;
-      if ($rootScope.form.bid){
-        $rootScope.form.BidsForm.bid.$setViewValue(math.format($rootScope.form.bid, {
-          notation: 'fixed',
-          precision: 2
-        }).replace(/(\d)(?=(\d{3})+\.)/g, '$1 ').replace(/\./g, ","));
+
+    $rootScope.get_last_bid = function() {
+      var bids = [];
+      $rootScope.auction_doc.stages.forEach(function (item, index) {
+        if (item.hasOwnProperty('type') && item.type === 'bids') bids.push(item);
+      });
+      var sortedBids =  bids.sort(function(a, b) {return Date.parse(b.time) - Date.parse(a.time)});
+      if (sortedBids.length > 0) {
+        return sortedBids[0];
       }
     };
+
     $rootScope.start();
 }]);
